@@ -7,14 +7,31 @@ export class InterviewController {
     try {
       const { candidateInfo } = req.body;
       
-      if (!candidateInfo.name || !candidateInfo.email || !candidateInfo.phone) {
+      console.log('Received candidateInfo:', candidateInfo);
+      
+      // Trim whitespace and validate
+      const name = candidateInfo?.name?.trim();
+      const email = candidateInfo?.email?.trim();  
+      const phone = candidateInfo?.phone?.trim();
+      
+      if (!name || !email || !phone) {
+        console.log('Validation failed:', { name: !!name, email: !!email, phone: !!phone });
         return res.status(400).json({ 
           error: 'Missing required information', 
           missing: {
-            name: !candidateInfo.name,
-            email: !candidateInfo.email,
-            phone: !candidateInfo.phone
+            name: !name,
+            email: !email,
+            phone: !phone
           }
+        });
+      }
+      
+      // Additional email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          error: 'Invalid email format', 
+          missing: { name: false, email: true, phone: false }
         });
       }
       

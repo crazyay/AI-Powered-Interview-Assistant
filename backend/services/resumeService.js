@@ -13,21 +13,61 @@ export class ResumeService {
       if (file.mimetype === 'application/pdf') {
         try {
           console.log('📄 Processing PDF file:', file.originalname);
-          // Try to use pdf-parse if available
-          const pdfParse = await import('pdf-parse').catch(() => null);
-          if (pdfParse) {
-            console.log('📄 Using pdf-parse library');
-            const data = await pdfParse.default(file.buffer);
-            text = data.text;
-            console.log('📄 PDF text extracted, length:', text.length);
-          } else {
-            console.log('⚠️ pdf-parse not available, using fallback');
-            // Fallback - create meaningful placeholder text
-            text = `Resume uploaded: ${file.originalname}\n\nNote: PDF text extraction requires pdf-parse package. Please provide your contact information manually or install pdf-parse for automatic extraction.`;
+          
+          // Use pdf2json as it's more reliable
+          const PDFParser = (await import('pdf2json')).default;
+          
+          console.log('📄 Parsing PDF with pdf2json...');
+          
+          // Create a promise-based wrapper for pdf2json
+          const parsePdf = () => {
+            return new Promise((resolve, reject) => {
+              const pdfParser = new PDFParser();
+              
+              pdfParser.on('pdfParser_dataError', (errData) => {
+                reject(new Error(errData.parserError));
+              });
+              
+              pdfParser.on('pdfParser_dataReady', (pdfData) => {
+                try {
+                  // Extract text from pdf2json format
+                  let extractedText = '';
+                  if (pdfData.Pages) {
+                    pdfData.Pages.forEach(page => {
+                      if (page.Texts) {
+                        page.Texts.forEach(textItem => {
+                          if (textItem.R) {
+                            textItem.R.forEach(r => {
+                              if (r.T) {
+                                extractedText += decodeURIComponent(r.T) + ' ';
+                              }
+                            });
+                          }
+                        });
+                      }
+                    });
+                  }
+                  resolve(extractedText.trim());
+                } catch (parseError) {
+                  reject(new Error('Failed to extract text from PDF data'));
+                }
+              });
+              
+              // Parse the PDF buffer
+              pdfParser.parseBuffer(file.buffer);
+            });
+          };
+          
+          text = await parsePdf();
+          console.log('📄 PDF text extracted, length:', text.length);
+          console.log('📄 First 200 chars of extracted text:', text.substring(0, 200));
+          
+          if (!text || text.trim().length < 10) {
+            throw new Error('PDF appears to be empty or contains no readable text');
           }
         } catch (pdfError) {
           console.log('❌ PDF parsing failed:', pdfError.message);
-          text = `PDF file uploaded: ${file.originalname}. Could not extract text automatically. Error: ${pdfError.message}`;
+          text = `PDF file uploaded: ${file.originalname}. Could not extract text automatically. Error: ${pdfError.message}. Please fill in your information manually.`;
         }
       } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         try {

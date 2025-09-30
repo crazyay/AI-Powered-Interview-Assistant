@@ -37,6 +37,54 @@ export default function Home() {
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [hasCheckedForExistingInterview, setHasCheckedForExistingInterview] = useState(false);
   const [missingFields, setMissingFields] = useState<{ name: boolean; email: boolean; phone: boolean } | null>(null);
+  const [activeTab, setActiveTab] = useState('interviewee');
+  const [showConfirmLeaveInterview, setShowConfirmLeaveInterview] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+  // Check if interview is in progress
+  const isInterviewInProgress = () => {
+    return interview?.interviewId && 
+           interview?.isActive && 
+           !interview?.isFinished && 
+           (step === InterviewStep.INTERVIEW || step === InterviewStep.CANDIDATE_INFO);
+  };
+
+  // Handle tab navigation with confirmation if needed
+  const handleTabNavigation = (tabName: string) => {
+    if (isInterviewInProgress()) {
+      setPendingNavigation(tabName);
+      setShowConfirmLeaveInterview(true);
+    } else {
+      executeTabNavigation(tabName);
+    }
+  };
+
+  // Execute the actual navigation
+  const executeTabNavigation = (tabName: string) => {
+    if (tabName === 'interviewee') {
+      setActiveTab('interviewee');
+      // Reset to resume upload page
+      setStep(InterviewStep.UPLOAD);
+      dispatch(resetInterview());
+      setError(null);
+      setMissingFields(null);
+      console.log('Switched to Interviewee tab - reset to upload page');
+    } else if (tabName === 'interviewer') {
+      setActiveTab('interviewer');
+      window.location.href = '/dashboard';
+    }
+  };
+
+  // Handle confirmation dialog response
+  const handleConfirmLeaveInterview = (confirm: boolean) => {
+    setShowConfirmLeaveInterview(false);
+    
+    if (confirm && pendingNavigation) {
+      executeTabNavigation(pendingNavigation);
+    }
+    
+    setPendingNavigation(null);
+  };
 
   // Check for existing interview on component mount (only once)
   useEffect(() => {
@@ -80,7 +128,12 @@ export default function Home() {
   };
 
   const handleStartInterview = async () => {
-    if (!interview?.candidateInfo) return;
+    console.log('Starting interview with candidateInfo:', interview?.candidateInfo);
+    
+    if (!interview?.candidateInfo) {
+      console.error('No candidate info available');
+      return;
+    }
     
     setLoading(true);
     setError(null);
@@ -90,6 +143,7 @@ export default function Home() {
 
     try {
       const result = await api.startInterview(interview.candidateInfo);
+      console.log('Start interview result:', result);
       
       if (result.success && result.interviewId && result.firstQuestion) {
         dispatch(startInterview({
@@ -99,11 +153,14 @@ export default function Home() {
         }));
         setStep(InterviewStep.INTERVIEW);
       } else if (result.missing) {
+        console.log('Missing fields detected:', result.missing);
         setMissingFields(result.missing);
       } else {
+        console.error('Interview start failed:', result.error);
         setError(result.error || 'Failed to start interview');
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Interview start error:', err);
       setError('An unexpected error occurred while starting the interview');
     } finally {
       setLoading(false);
@@ -272,7 +329,13 @@ export default function Home() {
         return interview?.candidateInfo ? (
           <CandidateForm
             candidateInfo={interview.candidateInfo}
-            onUpdate={(info) => dispatch(setCandidateInfo(info))}
+            onUpdate={(info) => {
+              dispatch(setCandidateInfo(info));
+              // Clear missing fields when info is updated
+              setMissingFields(null);
+              setError(null);
+              console.log('Candidate info updated:', info);
+            }}
             onStartInterview={handleStartInterview}
             missingFields={missingFields || undefined}
             loading={loading}
@@ -302,24 +365,47 @@ export default function Home() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
-        <div className="container mx-auto">
-          {/* Header Navigation */}
-          <nav className="mb-8">
-            <div className="flex justify-between items-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="bg-white shadow-sm border-b mb-8">
+          <div className="container mx-auto px-4">
+            {/* Header Navigation */}
+            <div className="flex justify-between items-center py-4">
               <div className="flex items-center space-x-2">
                 <Brain className="h-8 w-8 text-blue-600" />
-                <span className="text-xl font-bold text-gray-900">AI Interview</span>
+                <span className="text-xl font-bold text-gray-900">AI Interview Assistant</span>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => window.location.href = '/dashboard'}
-              >
-                View Dashboard
-              </Button>
             </div>
-          </nav>
-
+            
+            {/* Tab Navigation */}
+            <div className="border-t border-gray-200">
+              <nav className="-mb-px flex space-x-8">
+                <button
+                  onClick={() => handleTabNavigation('interviewee')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 cursor-pointer ${
+                    activeTab === 'interviewee'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Users className="w-4 h-4 inline-block mr-2" />
+                  Interviewee
+                </button>
+                <button
+                  onClick={() => handleTabNavigation('interviewer')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 cursor-pointer ${
+                    activeTab === 'interviewer'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Brain className="w-4 h-4 inline-block mr-2" />
+                  Interviewer
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-8">
           {/* Error Display */}
           {error && (
             <div className="max-w-2xl mx-auto mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -340,9 +426,37 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Confirm Leave Interview Modal */}
+      <Dialog open={showConfirmLeaveInterview} onOpenChange={setShowConfirmLeaveInterview}>
+        <DialogContent className="bg-white border border-gray-200 shadow-xl">
+          <DialogHeader>
+            <DialogTitle>⚠️ Interview in Progress</DialogTitle>
+            <DialogDescription>
+              You are currently in the middle of an interview. Leaving now will end your current session and you won't be able to resume from where you left off.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex space-x-4 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => handleConfirmLeaveInterview(false)}
+              className="flex-1"
+            >
+              Stay in Interview
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleConfirmLeaveInterview(true)}
+              className="flex-1"
+            >
+              End Interview & Leave
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Welcome Back Modal */}
       <Dialog open={showWelcomeBack} onOpenChange={setShowWelcomeBack}>
-        <DialogContent>
+        <DialogContent className="bg-white border border-gray-200 shadow-xl">
           <DialogHeader>
             <DialogTitle>Welcome Back!</DialogTitle>
             <DialogDescription>

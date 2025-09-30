@@ -47,7 +47,54 @@ export default function InterviewApp() {
   const [currentStep, setCurrentStep] = useState(INTERVIEW_STEPS.WELCOME);
   const [showCountdown, setShowCountdown] = useState(false);
   const [hasCheckedExistingInterview, setHasCheckedExistingInterview] = useState(false);
+  const [activeTab, setActiveTab] = useState('interviewee');
+  const [showConfirmLeaveInterview, setShowConfirmLeaveInterview] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const { isHealthy, loading: healthLoading } = useHealthCheck();
+
+  // Check if interview is in progress
+  const isInterviewInProgress = () => {
+    return interviewId && 
+           currentQuestion && 
+           !results && 
+           (currentStep === INTERVIEW_STEPS.INTERVIEW);
+  };
+
+  // Handle tab navigation with confirmation if needed
+  const handleTabNavigation = (tabName: string) => {
+    if (isInterviewInProgress()) {
+      setPendingNavigation(tabName);
+      setShowConfirmLeaveInterview(true);
+    } else {
+      executeTabNavigation(tabName);
+    }
+  };
+
+  // Execute the actual navigation
+  const executeTabNavigation = (tabName: string) => {
+    if (tabName === 'interviewee') {
+      setActiveTab('interviewee');
+      // Reset to resume upload page
+      setCurrentStep(INTERVIEW_STEPS.WELCOME);
+      dispatch(resetInterview());
+      setError('');
+      console.log('Switched to Interviewee tab - reset to upload page');
+    } else if (tabName === 'interviewer') {
+      setActiveTab('interviewer');
+      window.open('/dashboard', '_blank');
+    }
+  };
+
+  // Handle confirmation dialog response
+  const handleConfirmLeaveInterview = (confirm: boolean) => {
+    setShowConfirmLeaveInterview(false);
+    
+    if (confirm && pendingNavigation) {
+      executeTabNavigation(pendingNavigation);
+    }
+    
+    setPendingNavigation(null);
+  };
 
   useEffect(() => {
     // Check for existing interview only once when component mounts
@@ -70,9 +117,19 @@ export default function InterviewApp() {
   }, [hasCheckedExistingInterview, interviewId, results, candidateInfo]);
 
   const handleCandidateInfoSubmit = (info: any) => {
-    dispatch(setCandidateInfo(info));
+    // Ensure all fields are properly set with fallbacks
+    const completeInfo = {
+      name: info.name || '',
+      email: info.email || '',
+      phone: info.phone || '',
+      resumeText: info.resumeText || ''
+    };
+    
+    dispatch(setCandidateInfo(completeInfo));
+    console.log('Candidate info submitted:', completeInfo);
+    
     // Auto-advance to interview ready state when all info is filled
-    if (info.name && info.email && info.phone) {
+    if (completeInfo.name && completeInfo.email && completeInfo.phone) {
       setCurrentStep(INTERVIEW_STEPS.CANDIDATE_INFO);
     }
   };
@@ -239,25 +296,44 @@ export default function InterviewApp() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-4">
             <div className="flex items-center space-x-2">
               <Brain className="w-8 h-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-900">AI Interview Assistant</h1>
             </div>
-            <div className="flex items-center space-x-4 text-sm text-gray-600">
-              <div className="flex items-center space-x-1">
-                <CheckCircle className="w-4 h-4 text-green-500" />
-                <span>Server Online</span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open('/dashboard', '_blank')}
-              >
-                View Dashboard
-              </Button>
+            <div className="flex items-center space-x-1">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span className="text-sm text-gray-600">Server Online</span>
             </div>
+          </div>
+          
+          {/* Tab Navigation */}
+          <div className="border-t border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => handleTabNavigation('interviewee')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 cursor-pointer ${
+                  activeTab === 'interviewee'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Users className="w-4 h-4 inline-block mr-2" />
+                Interviewee
+              </button>
+              <button
+                onClick={() => handleTabNavigation('interviewer')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 cursor-pointer ${
+                  activeTab === 'interviewer'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Brain className="w-4 h-4 inline-block mr-2" />
+                Interviewer
+              </button>
+            </nav>
           </div>
         </div>
       </header>
@@ -414,6 +490,34 @@ export default function InterviewApp() {
       
       {showCountdown && (
         <Countdown onComplete={handleCountdownComplete} />
+      )}
+
+      {/* Confirm Leave Interview Modal */}
+      {showConfirmLeaveInterview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              ⚠️ Interview in Progress
+            </h3>
+            <p className="text-gray-600 mb-6">
+              You are currently in the middle of an interview. Leaving now will end your current session and you won't be able to resume from where you left off.
+            </p>
+            <div className="flex space-x-4">
+              <button
+                onClick={() => handleConfirmLeaveInterview(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 cursor-pointer"
+              >
+                Stay in Interview
+              </button>
+              <button
+                onClick={() => handleConfirmLeaveInterview(true)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 cursor-pointer"
+              >
+                End Interview & Leave
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

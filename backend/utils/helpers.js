@@ -1,32 +1,51 @@
 // Helper function // Extract information from resume text using AI and regex patterns
 export async function extractResumeInfo(text) {
+  console.log('📋 Starting resume info extraction from text length:', text.length);
+  
+  // Check if text is meaningful (not just a placeholder)
+  const isPlaceholder = text.includes('Note: PDF text extraction requires') || 
+                       text.includes('Could not extract text automatically') ||
+                       text.trim().length < 20;
+  
+  if (isPlaceholder) {
+    console.log('⚠️ Detected placeholder text, using regex-only extraction');
+    return {
+      name: extractWithRegex(text, 'name'),
+      email: extractWithRegex(text, 'email'),
+      phone: extractWithRegex(text, 'phone'),
+      resumeText: text
+    };
+  }
+  
   // First try AI extraction
   try {
     const { model } = await import('../config/gemini.js');
     
-    const prompt = `Extract the candidate's contact information from this resume text. Analyze carefully and extract the most relevant information.
+    const prompt = `CRITICAL: Extract ONLY contact information from this resume. Be extremely careful and thorough.
 
 Resume Text:
 ${text}
 
-Required JSON structure:
+EXTRACTION REQUIREMENTS:
+1. NAME: Look at the very top of the resume, header sections, or contact sections. Usually the first or second line.
+2. EMAIL: Find ANY valid email address in format xxx@xxx.xxx
+3. PHONE: Find ANY phone number in formats like: (123) 456-7890, 123-456-7890, +1-123-456-7890, 123.456.7890
+
+RETURN EXACT JSON FORMAT (no markdown, no extra text):
 {
-  "name": "Full Name (look for names at the top, in headers, or contact sections)",
-  "email": "email@example.com (look for valid email addresses)",
-  "phone": "+1-234-567-8900 (look for phone numbers in various formats)",
-  "resumeText": "original resume text",
-  "skills": "comma-separated list of technical skills mentioned",
-  "experience": "brief summary of work experience"
+  "name": "exact full name found",
+  "email": "exact email found",
+  "phone": "exact phone found",
+  "resumeText": "first 500 chars of resume"
 }
 
-Extraction Guidelines:
-- Name: Usually appears at the top of resume, may be in larger font or header
-- Email: Look for valid email format (xxx@xxx.xxx)
-- Phone: Can be in formats like (123) 456-7890, 123-456-7890, +1-123-456-7890
-- Skills: Technical skills, programming languages, frameworks
-- Experience: Years of experience, job titles, companies
-
-If any field cannot be found, use an empty string. Return ONLY the JSON object without markdown formatting.`;
+CRITICAL RULES:
+- Search the ENTIRE text thoroughly for email and phone
+- If multiple emails/phones exist, use the first professional one
+- Name is usually in the first 3 lines
+- Return empty string "" if not found, DO NOT guess
+- Ensure valid email format (must contain @ and .)
+- Phone must be 10+ digits`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -58,26 +77,69 @@ If any field cannot be found, use an empty string. Return ONLY the JSON object w
 
 // Helper function for regex-based extraction
 function extractWithRegex(text, field) {
-  const cleanText = text.toLowerCase();
+  console.log(`Extracting ${field} from text (length: ${text.length})`);
   
   switch (field) {
     case 'email':
-      const emailMatch = text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g);
-      return emailMatch ? emailMatch[0] : '';
+      // Multiple email patterns to catch more variations
+      const emailPatterns = [
+        /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi,
+        /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi,
+        /[\w\.-]+@[\w\.-]+\.\w+/gi
+      ];
+      
+      for (const pattern of emailPatterns) {
+        const emailMatches = text.match(pattern);
+        if (emailMatches && emailMatches.length > 0) {
+          console.log('Found email:', emailMatches[0]);
+          return emailMatches[0];
+        }
+      }
+      console.log('No email found');
+      return '';
       
     case 'phone':
-      // Match various phone formats
-      const phoneMatch = text.match(/(?:\+?1[-\s]?)?\(?([0-9]{3})\)?[-\s]?([0-9]{3})[-\s]?([0-9]{4})/g);
-      return phoneMatch ? phoneMatch[0] : '';
+      // Multiple phone patterns to catch more variations
+      const phonePatterns = [
+        /(?:\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g,
+        /(?:\+?[1-9]\d{0,3}[-.\s]?)?(?:\(?[0-9]{1,4}\)?[-.\s]?)?[0-9]{3,4}[-.\s]?[0-9]{3,4}/g,
+        /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g
+      ];
+      
+      for (const pattern of phonePatterns) {
+        const phoneMatch = text.match(pattern);
+        if (phoneMatch && phoneMatch[0]) {
+          return phoneMatch[0];
+        }
+      }
+      return '';
       
     case 'name':
-      // Look for name patterns (this is basic, AI is better for this)
-      const lines = text.split('\n').filter(line => line.trim());
-      if (lines.length > 0) {
-        const firstLine = lines[0].trim();
-        // If first line looks like a name (2-3 words, no numbers/special chars)
-        if (/^[A-Za-z\s]{2,50}$/.test(firstLine) && firstLine.split(' ').length <= 4) {
-          return firstLine;
+      // More sophisticated name extraction
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+      
+      // Look in first few lines for name patterns
+      for (let i = 0; i < Math.min(5, lines.length); i++) {
+        const line = lines[i];
+        
+        // Skip lines with common header text
+        if (line.toLowerCase().includes('resume') || 
+            line.toLowerCase().includes('curriculum') ||
+            line.toLowerCase().includes('cv') ||
+            line.length < 3) {
+          continue;
+        }
+        
+        // Check if line looks like a name
+        const nameMatch = line.match(/^([A-Z][a-z]+ (?:[A-Z][a-z]* )*[A-Z][a-z]+)$/);
+        if (nameMatch) {
+          return nameMatch[1];
+        }
+        
+        // Fallback: if first substantial line looks like a name
+        if (i === 0 && /^[A-Za-z\s]{2,50}$/.test(line) && 
+            line.split(' ').length >= 2 && line.split(' ').length <= 4) {
+          return line;
         }
       }
       return '';

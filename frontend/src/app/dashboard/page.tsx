@@ -66,20 +66,24 @@ export default function Dashboard() {
   };
 
   const handleViewDetails = async (candidateId: string) => {
+    console.log('Loading details for candidate:', candidateId);
     setLoadingDetails(true);
     setShowDetails(true);
     
     try {
       const result = await api.getCandidateDetails(candidateId);
+      console.log('Candidate details result:', result);
       
       if (result.candidate) {
         setSelectedCandidateDetails(result);
         dispatch(setSelectedCandidate(result.candidate));
       } else if (result.error) {
+        console.error('Error loading details:', result.error);
         dispatch(setError(result.error));
         setShowDetails(false);
       }
     } catch (err) {
+      console.error('Failed to load candidate details:', err);
       dispatch(setError('Failed to load candidate details'));
       setShowDetails(false);
     } finally {
@@ -315,7 +319,7 @@ export default function Dashboard() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredCandidates.map((candidate: any) => (
-                      <tr key={candidate.id} className="hover:bg-gray-50">
+                      <tr key={candidate._id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
@@ -362,7 +366,7 @@ export default function Dashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <Button
                             size="sm"
-                            onClick={() => handleViewDetails(candidate.id)}
+                            onClick={() => handleViewDetails(candidate._id)}
                           >
                             View Details
                           </Button>
@@ -379,7 +383,7 @@ export default function Dashboard() {
 
       {/* Candidate Details Modal */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-white border border-gray-200 shadow-xl">
           <DialogHeader>
             <DialogTitle>
               {selectedCandidateDetails?.candidate ? 
@@ -434,37 +438,141 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Interview Questions and Answers */}
+              {/* Interview Performance Overview */}
               {selectedCandidateDetails.interview && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Interview History</h3>
-                  <div className="space-y-4">
-                    {selectedCandidateDetails.interview.answers?.map((answer: any, index: number) => (
-                      <div key={index} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-medium text-gray-900">Question {index + 1}</h4>
-                          <div className="flex items-center space-x-2 text-sm">
-                            <span className="text-gray-500">{answer.timeSpent}s</span>
-                            {answer.score !== undefined && (
-                              <span className={cn(
-                                'font-medium',
-                                answer.score >= 80 ? 'text-green-600' :
-                                answer.score >= 60 ? 'text-yellow-600' :
-                                'text-red-600'
-                              )}>
-                                {answer.score}/100
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-gray-700 mb-3 font-medium">{answer.question}</p>
-                        <div className="bg-gray-50 rounded p-3">
-                          <p className="text-gray-600 text-sm">
-                            <strong>Answer:</strong> {answer.answer || 'No answer provided'}
-                          </p>
-                        </div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Interview Performance</h3>
+                  
+                  {/* Interview Stats */}
+                  <div className="bg-blue-50 rounded-lg p-4 mb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <span className="text-sm text-gray-500">Questions Answered</span>
+                        <p className="font-bold text-lg text-blue-600">
+                          {selectedCandidateDetails.interview.answers?.length || 0}
+                        </p>
                       </div>
-                    ))}
+                      <div>
+                        <span className="text-sm text-gray-500">Average Score</span>
+                        <p className="font-bold text-lg text-blue-600">
+                          {selectedCandidateDetails.candidate.totalScore}/100
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-500">Start Time</span>
+                        <p className="font-bold text-sm text-blue-600">
+                          {selectedCandidateDetails.interview.startTime ? 
+                            formatDate(selectedCandidateDetails.interview.startTime) : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-500">End Time</span>
+                        <p className="font-bold text-sm text-blue-600">
+                          {selectedCandidateDetails.interview.endTime ? 
+                            formatDate(selectedCandidateDetails.interview.endTime) : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Questions and Answers */}
+                  <h4 className="font-medium text-gray-900 mb-3">Questions & Answers</h4>
+                  <div className="space-y-4">
+                    {selectedCandidateDetails.interview.answers?.length > 0 ? (
+                      selectedCandidateDetails.interview.answers.map((answer: any, index: number) => {
+                        const question = selectedCandidateDetails.interview.questions?.[index];
+                        return (
+                          <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+                            {/* Question Header */}
+                            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                              <div className="flex justify-between items-center">
+                                <h5 className="font-semibold text-gray-900">
+                                  Question {index + 1}
+                                  {question?.difficulty && (
+                                    <span className={cn(
+                                      'ml-2 px-2 py-1 text-xs font-medium rounded-full',
+                                      question.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
+                                      question.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                      'bg-red-100 text-red-800'
+                                    )}>
+                                      {question.difficulty.toUpperCase()}
+                                    </span>
+                                  )}
+                                </h5>
+                                <div className="flex items-center space-x-3 text-sm">
+                                  <span className="text-gray-500">
+                                    ⏱️ {answer.timeSpent || 0}s
+                                    {question?.timeLimit && ` / ${question.timeLimit}s`}
+                                  </span>
+                                  {answer.score !== undefined && (
+                                    <span className={cn(
+                                      'px-2 py-1 rounded-full font-bold text-sm',
+                                      answer.score >= 80 ? 'bg-green-100 text-green-800' :
+                                      answer.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                                      answer.score >= 40 ? 'bg-orange-100 text-orange-800' :
+                                      'bg-red-100 text-red-800'
+                                    )}>
+                                      {answer.score}/100
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Question Content */}
+                            <div className="p-4">
+                              <div className="mb-4">
+                                <p className="text-gray-800 font-medium leading-relaxed">
+                                  {answer.question || question?.question || 'Question not available'}
+                                </p>
+                              </div>
+                              
+                              {/* Candidate Answer */}
+                              <div className="bg-blue-50 rounded-lg p-3">
+                                <div className="flex items-start space-x-2">
+                                  <div className="flex-shrink-0">
+                                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                                      <span className="text-white text-xs font-bold">A</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-gray-700 text-sm leading-relaxed">
+                                      {answer.answer && answer.answer.trim() ? 
+                                        answer.answer : 
+                                        <span className="text-gray-400 italic">No answer provided</span>
+                                      }
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Expected Answer (if available) */}
+                              {question?.expectedAnswer && (
+                                <div className="mt-3 bg-green-50 rounded-lg p-3">
+                                  <div className="flex items-start space-x-2">
+                                    <div className="flex-shrink-0">
+                                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                                        <span className="text-white text-xs font-bold">✓</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-xs text-green-600 font-medium mb-1">Expected Answer:</p>
+                                      <p className="text-green-700 text-sm leading-relaxed">
+                                        {question.expectedAnswer}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>No questions answered in this interview.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

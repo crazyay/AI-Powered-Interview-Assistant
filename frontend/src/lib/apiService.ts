@@ -36,19 +36,26 @@ export const apiService = {
   testGemini: () => api.get('/test-gemini'),
 
   // Resume operations
-  parseResume: (file: File) => {
+  parseResume: async (file: File) => {
     const formData = new FormData();
     formData.append('resume', file);
-    return api.post('/resume/parse', formData, {
+    console.log('API: Parsing resume file:', file.name);
+    const response = await api.post('/resume/parse', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    console.log('API: Resume parse response:', response.data);
+    return response;
   },
 
   // Interview operations
-  startInterview: (candidateInfo: CandidateInfo) =>
-    api.post('/interview/start', { candidateInfo }),
+  startInterview: async (candidateInfo: CandidateInfo) => {
+    console.log('API: Starting interview with:', candidateInfo);
+    const response = await api.post('/interview/start', { candidateInfo });
+    console.log('API: Start interview response:', response.data);
+    return response.data;
+  },
 
   getCurrentQuestion: (interviewId: string): Promise<{ data: QuestionResponse }> =>
     api.get(`/interview/${interviewId}/question`),

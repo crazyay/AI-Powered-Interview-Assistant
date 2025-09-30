@@ -23,26 +23,42 @@ export function CandidateForm({
 }: CandidateFormProps) {
   const [formData, setFormData] = useState(candidateInfo);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Sync form data with candidateInfo prop changes (e.g., from resume upload)
+  React.useEffect(() => {
+    console.log('CandidateInfo prop changed:', candidateInfo);
+    setFormData({
+      name: candidateInfo.name || '',
+      email: candidateInfo.email || '',
+      phone: candidateInfo.phone || '',
+      resumeText: candidateInfo.resumeText || ''
+    });
+    // Clear any existing errors when new data comes in
+    setErrors({});
+  }, [candidateInfo.name, candidateInfo.email, candidateInfo.phone, candidateInfo.resumeText]);
 
-  const validateForm = () => {
+  const validateForm = (dataToValidate = formData) => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.name.trim()) {
+    console.log('Validating form data:', dataToValidate);
+    
+    if (!dataToValidate.name?.trim()) {
       newErrors.name = 'Name is required';
     }
     
-    if (!formData.email.trim()) {
+    if (!dataToValidate.email?.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dataToValidate.email.trim())) {
       newErrors.email = 'Please enter a valid email address';
     }
     
-    if (!formData.phone.trim()) {
+    if (!dataToValidate.phone?.trim()) {
       newErrors.phone = 'Phone number is required';
-    } else if (!/^[\+]?[\d\s\-\(\)]{10,}$/.test(formData.phone.replace(/\s/g, ''))) {
+    } else if (!/^[\+]?[\d\s\-\(\)]{10,}$/.test(dataToValidate.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Please enter a valid phone number';
     }
 
+    console.log('Validation errors:', newErrors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -50,18 +66,34 @@ export function CandidateForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      onUpdate(formData);
-      onStartInterview();
+    if (loading) return; // Prevent double submission
+    
+    console.log('Form submitted with data:', formData);
+    
+    // Validate first
+    if (!validateForm()) {
+      console.log('Form validation failed:', errors);
+      return;
     }
+    
+    // Update parent state and start interview
+    onUpdate(formData);
+    onStartInterview();
   };
 
   const handleFieldChange = (field: keyof CandidateInfo, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    const updatedData = { ...formData, [field]: value };
+    setFormData(updatedData);
+    
+    // Update parent immediately
+    onUpdate(updatedData);
+    
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+    
+    console.log(`Field ${field} updated to:`, value);
   };
 
   const isFieldMissing = (field: string) => missingFields?.[field as keyof typeof missingFields];

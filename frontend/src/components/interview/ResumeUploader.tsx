@@ -44,11 +44,15 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
       try {
         const response = await apiService.parseResume(file);
         console.log('Resume parse response:', response.data);
+        
         const parsedInfo = response.data.candidateInfo;
         
         if (!parsedInfo) {
+          console.error('No candidateInfo in response:', response.data);
           throw new Error('No candidate information extracted from resume');
         }
+        
+        console.log('Parsed candidate info:', parsedInfo);
         
         // Start auto-filling animation
         setIsAutoFilling(true);
@@ -58,12 +62,34 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
         
         // Store extracted info and show verification
         setExtractedInfo(parsedInfo);
-        setCandidateInfo(parsedInfo);
+        
+        // Ensure all fields are properly set with fallbacks
+        const completeInfo = {
+          name: parsedInfo.name?.trim() || '',
+          email: parsedInfo.email?.trim() || '',
+          phone: parsedInfo.phone?.trim() || '',
+          resumeText: parsedInfo.resumeText || ''
+        };
+        
+        console.log('Extracted info breakdown:', {
+          originalParsedInfo: parsedInfo,
+          completeInfo,
+          hasName: !!completeInfo.name,
+          hasEmail: !!completeInfo.email,
+          hasPhone: !!completeInfo.phone
+        });
+        
+        setCandidateInfo(completeInfo);
         setIsAutoFilling(false);
         setShowVerification(true);
         
-        // Auto-fill the parent form
-        onCandidateInfo(parsedInfo);
+        // Auto-fill the parent form with complete info - delay to ensure state update
+        setTimeout(() => {
+          onCandidateInfo(completeInfo);
+          console.log('Parent form updated with:', completeInfo);
+        }, 100);
+        
+        console.log('Resume parsed and auto-filled:', completeInfo);
       } catch (err: any) {
         setError(err.response?.data?.error || 'Failed to parse resume');
         setIsAutoFilling(false);
@@ -77,6 +103,7 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
     const updatedInfo = { ...candidateInfo, [field]: value };
     setCandidateInfo(updatedInfo);
     onCandidateInfo(updatedInfo);
+    console.log(`Updated ${field}:`, value);
   };
 
   const isFormComplete = candidateInfo.name && candidateInfo.email && candidateInfo.phone;
