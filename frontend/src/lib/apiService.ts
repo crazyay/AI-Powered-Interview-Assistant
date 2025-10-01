@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { CandidateInfo, QuestionResponse, SubmitAnswerResponse, Candidate, InterviewStats, Interview, Question, Answer } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-powered-interview-assistant-bfc9.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
