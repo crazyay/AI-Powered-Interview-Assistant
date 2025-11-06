@@ -2,6 +2,9 @@
 export async function extractResumeInfo(text) {
   console.log('📋 Starting resume info extraction from text length:', text.length);
   
+  // Import API tracker
+  const { apiCallTracker } = await import('./apiCallTracker.js');
+  
   // Check if text is meaningful (not just a placeholder)
   const isPlaceholder = text.includes('Note: PDF text extraction requires') || 
                        text.includes('Could not extract text automatically') ||
@@ -46,6 +49,11 @@ CRITICAL RULES:
 - Return empty string "" if not found, DO NOT guess
 - Ensure valid email format (must contain @ and .)
 - Phone must be 10+ digits`;
+
+    // Track API call
+    apiCallTracker.logCall('extractResumeInfo', { 
+      textLength: text.length 
+    });
 
     const result = await model.generateContent(prompt);
     const response = await result.response;

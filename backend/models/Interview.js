@@ -10,21 +10,30 @@ const questionSchema = new mongoose.Schema({
     enum: ['easy', 'medium', 'hard'],
     required: true
   },
-  timeLimit: {
-    type: Number,
-    required: true,
-    min: 10,
-    max: 300 // 5 minutes max
-  },
   question: {
     type: String,
     required: true,
     trim: true
   },
-  expectedAnswer: {
-    type: String,
+  options: {
+    type: [String],
     required: true,
-    trim: true
+    validate: {
+      validator: function(arr) {
+        return arr.length === 4;
+      },
+      message: 'Question must have exactly 4 options'
+    }
+  },
+  correctAnswer: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 3
+  },
+  explanation: {
+    type: String,
+    default: ''
   }
 });
 
@@ -37,20 +46,23 @@ const answerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  answer: {
-    type: String,
-    default: ''
-  },
-  timeSpent: {
+  selectedOption: {
     type: Number,
     required: true,
-    min: 0
+    min: 0,
+    max: 3
+  },
+  correctAnswer: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 3
   },
   score: {
     type: Number,
     required: true,
     min: 0,
-    max: 100
+    max: 1  // MCQ: 1 mark per question
   },
   timestamp: {
     type: Date,
@@ -59,6 +71,15 @@ const answerSchema = new mongoose.Schema({
 });
 
 const interviewSchema = new mongoose.Schema({
+  testMode: {
+    type: String,
+    enum: ['resume', 'custom'],
+    default: 'resume'
+  },
+  topics: {
+    type: [String],
+    default: []
+  },
   candidateInfo: {
     name: {
       type: String,
@@ -100,7 +121,6 @@ const interviewSchema = new mongoose.Schema({
   totalScore: {
     type: Number,
     min: 0,
-    max: 100,
     default: null
   },
   summary: {

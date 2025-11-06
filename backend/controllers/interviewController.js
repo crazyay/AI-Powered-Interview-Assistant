@@ -5,9 +5,10 @@ export class InterviewController {
   // Start interview session
   static async startInterview(req, res) {
     try {
-      const { candidateInfo } = req.body;
+      const { candidateInfo, testMode = 'resume', topics = [], questionCount = 20 } = req.body;
       
-      console.log('Received candidateInfo:', candidateInfo);
+      console.log('Received request:', { testMode, topics, questionCount });
+      console.log('Candidate Info:', candidateInfo);
       
       // Trim whitespace and validate
       const name = candidateInfo?.name?.trim();
@@ -35,16 +36,23 @@ export class InterviewController {
         });
       }
       
-      console.log('Starting interview for:', candidateInfo.name);
-      if (candidateInfo.resumeText) {
-        console.log('Resume text provided, generating personalized questions');
-      } else {
-        console.log('No resume text provided, using generic questions');
+      // Validate test mode specific requirements
+      if (testMode === 'custom' && (!topics || topics.length === 0)) {
+        return res.status(400).json({ 
+          error: 'Topics are required for custom test mode'
+        });
       }
-
-      const questions = await generateInterviewQuestions(candidateInfo);
+      
+      console.log(`Starting ${testMode} test for:`, candidateInfo.name);
+      
+      // Generate questions based on test mode
+      const testConfig = { mode: testMode, topics, questionCount };
+      const questions = await generateInterviewQuestions(candidateInfo, testConfig);
+      console.log(questions);
       
       const interviewData = {
+        testMode,
+        topics,
         candidateInfo,
         questions: questions.questions,
         currentQuestionIndex: 0,
@@ -60,7 +68,8 @@ export class InterviewController {
       res.json({ 
         success: true, 
         interviewId: interview._id,
-        firstQuestion: questions.questions[0]
+        firstQuestion: questions.questions[0],
+        totalQuestions: questions.questions.length
       });
     } catch (error) {
       console.error('Error starting interview:', error);
@@ -68,6 +77,26 @@ export class InterviewController {
     }
   }
 
+  // Get all questions for an interview
+  static async getAllQuestions(req, res) {
+    try {
+      const cleanInterviewId = req.params.interviewId.replace(/^:+/, '');
+      const interview = await DatabaseService.findInterviewById(cleanInterviewId);
+      
+      if (!interview) {
+        return res.status(404).json({ error: 'Interview not found' });
+      }
+
+      res.json({
+        questions: interview.questions,
+        totalQuestions: interview.questions.length
+      });
+    } catch (error) {
+      console.error('Error getting all questions:', error);
+      res.status(500).json({ error: 'Failed to get questions' });
+    }
+  }
+ 
   // Get current question
   static async getCurrentQuestion(req, res) {
     try {
@@ -105,7 +134,7 @@ export class InterviewController {
   // Submit answer
   static async submitAnswer(req, res) {
     try {
-      const { answer, timeSpent } = req.body;
+      const { selectedOption } = req.body;
       const cleanInterviewId = req.params.interviewId.replace(/^:+/, '');
       const interview = await DatabaseService.findInterviewById(cleanInterviewId);
       
@@ -115,31 +144,34 @@ export class InterviewController {
 
       const currentQuestion = interview.questions[interview.currentQuestionIndex];
       
-      console.log(`📝 Scoring Answer for Question ${currentQuestion.id}:`);
+      console.log(`📝 Scoring MCQ Answer for Question ${currentQuestion.id}:`);
       console.log(`Question: ${currentQuestion.question}`);
-      console.log(`Answer: "${answer || 'NO ANSWER PROVIDED'}"`);
-      console.log(`Expected: ${currentQuestion.expectedAnswer}`);
+      console.log(`Selected Option: ${selectedOption} (type: ${typeof selectedOption})`);
+      console.log(`Correct Answer: ${currentQuestion.correctAnswer} (type: ${typeof currentQuestion.correctAnswer})`);
       
-      const score = await scoreAnswer(currentQuestion.question, answer, currentQuestion.expectedAnswer);
+      // Ensure both are numbers for comparison
+      const selectedOptionNum = parseInt(selectedOption);
+      const correctAnswerNum = parseInt(currentQuestion.correctAnswer);
       
-      // Validate score
-      const finalScore = (score !== undefined && score !== null && !isNaN(score)) 
-        ? Math.max(0, Math.min(100, score)) 
-        : 0;
+      // Score MCQ answer (1 if correct, 0 if wrong)
+      const score = await scoreAnswer(currentQuestion.question, selectedOptionNum, correctAnswerNum);
       
-      console.log(`✅ Final Score Assigned: ${finalScore}/100`);
+      console.log(`✅ Score Assigned: ${score}/1`);
       
       const newAnswer = {
         questionId: currentQuestion.id,
         question: currentQuestion.question,
-        answer: answer || '',
-        timeSpent,
-        score: finalScore,
+        selectedOption: selectedOptionNum,
+        correctAnswer: correctAnswerNum,
+        score: score,
         timestamp: new Date()
       };
 
       interview.answers.push(newAnswer);
       interview.currentQuestionIndex++;
+      
+      console.log(`📝 Answer added. Total answers now: ${interview.answers.length}`);
+      console.log(`   Current question index: ${interview.currentQuestionIndex}/${interview.questions.length}`);
       
       // Update the interview in database
       await DatabaseService.updateInterview(cleanInterviewId, {
@@ -149,19 +181,23 @@ export class InterviewController {
       
       // Check if interview is finished
       if (interview.currentQuestionIndex >= interview.questions.length) {
-        await InterviewController.finalizeInterview(interview);
+        // Fetch fresh interview data to ensure we have all answers
+        const updatedInterview = await DatabaseService.findInterviewById(cleanInterviewId);
+        await InterviewController.finalizeInterview(updatedInterview);
         
         res.json({ 
           success: true, 
           finished: true,
-          score: interview.totalScore,
-          summary: interview.summary
+          answerScore: score, // Score for the last answer submitted
+          totalScore: updatedInterview.totalScore, // Total score for all answers
+          summary: updatedInterview.summary
         });
       } else {
         const nextQuestion = interview.questions[interview.currentQuestionIndex];
         res.json({ 
           success: true, 
           finished: false,
+          score: score, // Return the score for this answer
           nextQuestion,
           questionNumber: interview.currentQuestionIndex + 1
         });
@@ -175,23 +211,21 @@ export class InterviewController {
   // Finalize interview and generate summary
   static async finalizeInterview(interview) {
     try {
-      // Calculate total score with proper validation
+      console.log(`🏁 Finalizing interview with ${interview.answers.length} answers`);
+      
+      // Calculate total score (sum of correct answers for MCQ)
       let totalScore = 0;
       
       if (interview.answers && interview.answers.length > 0) {
-        // Only count answers that have valid scores
-        const validAnswers = interview.answers.filter(answer => 
-          answer.score !== undefined && answer.score !== null && !isNaN(answer.score)
-        );
+        totalScore = interview.answers.reduce((sum, answer) => sum + (answer.score || 0), 0);
+        console.log(`📊 Total Score Calculation:`);
+        console.log(`   Answers received: ${interview.answers.length}`);
+        console.log(`   Total Score: ${totalScore}/${interview.answers.length}`);
         
-        if (validAnswers.length > 0) {
-          const sumScore = validAnswers.reduce((sum, answer) => sum + (answer.score || 0), 0);
-          totalScore = Math.round(sumScore / validAnswers.length);
-          console.log(`📊 Score calculation: ${sumScore} points / ${validAnswers.length} answers = ${totalScore}%`);
-        } else {
-          console.log('⚠️  No valid scores found, setting totalScore to 0');
-          totalScore = 0;
-        }
+        // Log each answer for debugging
+        interview.answers.forEach((ans, idx) => {
+          console.log(`   Q${idx + 1}: Selected=${ans.selectedOption}, Correct=${ans.correctAnswer}, Score=${ans.score}`);
+        });
       } else {
         console.log('⚠️  No answers found, setting totalScore to 0');
         totalScore = 0;

@@ -6,6 +6,9 @@ const router = express.Router();
 // Start interview session
 router.post('/start', InterviewController.startInterview);
 
+// Get all questions for an interview
+router.get('/:interviewId/questions', InterviewController.getAllQuestions);
+
 // Get current question
 router.get('/:interviewId/question', InterviewController.getCurrentQuestion);
 

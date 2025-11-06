@@ -21,7 +21,6 @@ const candidateSchema = new mongoose.Schema({
   totalScore: {
     type: Number,
     min: 0,
-    max: 100,
     default: null
   },
   summary: {
