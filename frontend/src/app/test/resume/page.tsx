@@ -22,6 +22,8 @@ export default function ResumeTestPage() {
   const [questionCount, setQuestionCount] = useState(20);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -38,7 +40,7 @@ export default function ResumeTestPage() {
       const formData = new FormData();
       formData.append('resume', file);
 
-      const response = await fetch('http://localhost:5000/api/resume/parse', {
+      const response = await fetch(`${API_URL}/resume/parse`, {
         method: 'POST',
         body: formData,
       });

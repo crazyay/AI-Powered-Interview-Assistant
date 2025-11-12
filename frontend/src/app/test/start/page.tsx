@@ -37,6 +37,8 @@ export default function TestStartPage() {
   const [interviewId, setInterviewId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
   useEffect(() => {
     // Load test configuration from localStorage
     const config = localStorage.getItem('testConfig');
@@ -54,7 +56,7 @@ export default function TestStartPage() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:5000/api/interview/start', {
+      const response = await fetch(`${API_URL}/interview/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,7 +72,7 @@ export default function TestStartPage() {
       if (data.success) {
         setInterviewId(data.interviewId);
         // Fetch all questions
-        const questionsResponse = await fetch(`http://localhost:5000/api/interview/${data.interviewId}/questions`);
+        const questionsResponse = await fetch(`${API_URL}/interview/${data.interviewId}/questions`);
         const questionsData = await questionsResponse.json();
         setQuestions(questionsData.questions || [data.firstQuestion]);
       } else {
@@ -95,7 +97,7 @@ export default function TestStartPage() {
     const currentQuestion = questions[currentQuestionIndex];
 
     try {
-      const response = await fetch(`http://localhost:5000/api/interview/${interviewId}/answer`, {
+      const response = await fetch(`${API_URL}/interview/${interviewId}/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -151,7 +153,7 @@ export default function TestStartPage() {
     } else {
       // Submit test without answer for current question
       try {
-        const response = await fetch(`http://localhost:5000/api/interview/${interviewId}/finish`, {
+        const response = await fetch(`${API_URL}/interview/${interviewId}/finish`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
