@@ -22,8 +22,14 @@ export default function ResumeTestPage() {
   const [questionCount, setQuestionCount] = useState(20);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 
+    (typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+      ? 'https://ai-powered-interview-assistant-bfc9.onrender.com/api'
+      : 'http://localhost:5000/api');
+    console.log('API_URL:', API_URL);
+    console.log(process.env.NEXT_PUBLIC_API_URL);
+    
+    
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {

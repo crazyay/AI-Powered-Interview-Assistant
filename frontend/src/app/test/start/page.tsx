@@ -37,7 +37,10 @@ export default function TestStartPage() {
   const [interviewId, setInterviewId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 
+    (typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+      ? 'https://ai-powered-interview-assistant-bfc9.onrender.com/api'
+      : 'http://localhost:5000/api');
 
   useEffect(() => {
     // Load test configuration from localStorage
